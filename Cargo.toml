@@ -1,7 +1,8 @@
 [package]
 edition = "2021"
-name = "rp2040-project-template"
+name = "pico-oled"
 version = "0.1.0"
+authors = ["Björn Guth <b.guth@netcon-consulting.com>"]
 
 [dependencies]
 cortex-m = "0.7"
@@ -15,6 +16,8 @@ panic-probe = { version = "0.3", features = ["print-defmt"] }
 
 # We're using a Pico by default on this template
 rp-pico = "0.4"
+ssd1306 = "0.7.1"
+embedded-graphics = "0.7.1"
 
 # but you can use any BSP. Uncomment this to use the pro_micro_rp2040 BSP instead
 # sparkfun-pro-micro-rp2040 = "0.3"

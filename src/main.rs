@@ -9,6 +9,7 @@ use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::v2::OutputPin;
 use embedded_time::fixed_point::FixedPoint;
+use embedded_time::rate::Extensions;
 use panic_probe as _;
 
 // Provide an alias for our BSP so we can switch targets quickly.
@@ -21,7 +22,16 @@ use bsp::hal::{
     pac,
     sio::Sio,
     watchdog::Watchdog,
+    I2C,
 };
+
+use embedded_graphics::{
+    mono_font::{ascii::FONT_6X10, MonoTextStyleBuilder},
+    pixelcolor::BinaryColor,
+    prelude::*,
+    text::{Baseline, Text},
+};
+use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 
 #[entry]
 fn main() -> ! {
@@ -56,13 +66,47 @@ fn main() -> ! {
 
     let mut led_pin = pins.led.into_push_pull_output();
 
+    let i2c = I2C::i2c1(
+        pac.I2C1,
+        pins.gpio10.into_mode(), // sda
+        pins.gpio11.into_mode(), // scl
+        400.kHz(),
+        &mut pac.RESETS,
+        125_000_000.Hz(),
+    );
+
+    let interface = I2CDisplayInterface::new(i2c);
+    let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0)
+        .into_buffered_graphics_mode();
+    display.init().unwrap();
+
+    let text_style = MonoTextStyleBuilder::new()
+        .font(&FONT_6X10)
+        .text_color(BinaryColor::On)
+        .build();
+
+    Text::with_baseline(
+        "Rust on RaspPi Pico",
+        Point::zero(),
+        text_style,
+        Baseline::Top,
+    )
+    .draw(&mut display)
+    .unwrap();
+
+    Text::with_baseline("Fuck Yeah!", Point::new(0, 16), text_style, Baseline::Top)
+        .draw(&mut display)
+        .unwrap();
+
+    display.flush().unwrap();
+
     loop {
         info!("on!");
         led_pin.set_high().unwrap();
         delay.delay_ms(500);
         info!("off!");
         led_pin.set_low().unwrap();
-        delay.delay_ms(500);
+        delay.delay_ms(250);
     }
 }
 
