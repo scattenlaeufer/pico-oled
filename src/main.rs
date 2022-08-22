@@ -5,9 +5,12 @@
 #![no_main]
 
 use bsp::entry;
+use core::fmt::Write;
 use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::prelude::*;
+use embedded_time::duration::Microseconds;
 use embedded_time::fixed_point::FixedPoint;
 use embedded_time::rate::Extensions;
 use panic_probe as _;
@@ -25,12 +28,6 @@ use bsp::hal::{
     I2C,
 };
 
-use embedded_graphics::{
-    mono_font::{ascii::FONT_6X10, MonoTextStyleBuilder},
-    pixelcolor::BinaryColor,
-    prelude::*,
-    text::{Baseline, Text},
-};
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 
 #[entry]
@@ -76,29 +73,16 @@ fn main() -> ! {
     );
 
     let interface = I2CDisplayInterface::new(i2c);
-    let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0)
-        .into_buffered_graphics_mode();
+    let mut display =
+        Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0).into_terminal_mode();
     display.init().unwrap();
 
-    let text_style = MonoTextStyleBuilder::new()
-        .font(&FONT_6X10)
-        .text_color(BinaryColor::On)
-        .build();
+    let mut a = 1;
+    let mut b = 0;
 
-    Text::with_baseline(
-        "Rust on RaspPi Pico",
-        Point::zero(),
-        text_style,
-        Baseline::Top,
-    )
-    .draw(&mut display)
-    .unwrap();
-
-    Text::with_baseline("Fuck Yeah!", Point::new(0, 16), text_style, Baseline::Top)
-        .draw(&mut display)
-        .unwrap();
-
-    display.flush().unwrap();
+    display.clear().unwrap();
+    display.write_fmt(format_args!("fib: {a}")).unwrap();
+    watchdog.start(Microseconds::new(1_000_000));
 
     loop {
         info!("on!");
@@ -107,6 +91,12 @@ fn main() -> ! {
         info!("off!");
         led_pin.set_low().unwrap();
         delay.delay_ms(250);
+        let c = a;
+        a += b;
+        b = c;
+        display.clear().unwrap();
+        display.write_fmt(format_args!("fib: {a}")).unwrap();
+        watchdog.feed();
     }
 }
 
