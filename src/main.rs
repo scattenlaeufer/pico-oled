@@ -21,6 +21,7 @@ use rp_pico as bsp;
 // use sparkfun_pro_micro_rp2040 as bsp;
 
 use bsp::hal::{
+    adc,
     clocks::{init_clocks_and_plls, Clock},
     pac,
     sio::Sio,
@@ -29,6 +30,8 @@ use bsp::hal::{
 };
 
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
+
+const TEMP_SENSOR_RESOLUTION: u16 = 4096;
 
 #[entry]
 fn main() -> ! {
@@ -62,6 +65,7 @@ fn main() -> ! {
     );
 
     let mut led_pin = pins.led.into_push_pull_output();
+    led_pin.set_low().unwrap();
 
     let i2c = I2C::i2c1(
         pac.I2C1,
@@ -77,25 +81,27 @@ fn main() -> ! {
         Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0).into_terminal_mode();
     display.init().unwrap();
 
-    let mut a = 1;
-    let mut b = 0;
+    let mut adc = adc::Adc::new(pac.ADC, &mut pac.RESETS);
+    let mut temp_sensor = adc.enable_temp_sensor();
 
     display.clear().unwrap();
-    display.write_fmt(format_args!("fib: {a}")).unwrap();
     watchdog.start(Microseconds::new(1_000_000));
 
     loop {
-        info!("on!");
-        led_pin.set_high().unwrap();
-        delay.delay_ms(500);
-        info!("off!");
-        led_pin.set_low().unwrap();
-        delay.delay_ms(250);
-        let c = a;
-        a += b;
-        b = c;
+        let reading: u16 = adc.read(&mut temp_sensor).unwrap();
+        let voltage = reading as f32 * 3.3 / TEMP_SENSOR_RESOLUTION as f32;
+        let temp = 27_f32 - (voltage - 0.706) / 0.001721;
         display.clear().unwrap();
-        display.write_fmt(format_args!("fib: {a}")).unwrap();
+        display
+            .write_fmt(format_args!(
+                "temp: {:.1}*C\nr:    {}\nv:    {:.4}V",
+                temp, reading, voltage
+            ))
+            .unwrap();
+        // led_pin.set_high().unwrap();
+        // delay.delay_ms(50);
+        // led_pin.set_low().unwrap();
+        delay.delay_ms(500);
         watchdog.feed();
     }
 }
