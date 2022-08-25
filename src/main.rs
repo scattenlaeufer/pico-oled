@@ -13,6 +13,7 @@ use embedded_hal::prelude::*;
 use embedded_time::duration::Microseconds;
 use embedded_time::fixed_point::FixedPoint;
 use embedded_time::rate::Extensions;
+use heapless::String;
 use panic_probe as _;
 
 // Provide an alias for our BSP so we can switch targets quickly.
@@ -28,7 +29,12 @@ use bsp::hal::{
     watchdog::Watchdog,
     I2C,
 };
-
+use embedded_graphics::{
+    mono_font::{ascii::FONT_6X10, MonoTextStyleBuilder},
+    pixelcolor::BinaryColor,
+    prelude::*,
+    text::{Baseline, Text},
+};
 use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 
 const TEMP_SENSOR_RESOLUTION: u16 = 4096;
@@ -77,32 +83,48 @@ fn main() -> ! {
     );
 
     let interface = I2CDisplayInterface::new(i2c);
-    let mut display =
-        Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0).into_terminal_mode();
+    let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0)
+        .into_buffered_graphics_mode();
     display.init().unwrap();
+    let text_style = MonoTextStyleBuilder::new()
+        .font(&FONT_6X10)
+        .text_color(BinaryColor::On)
+        .build();
 
     let mut adc = adc::Adc::new(pac.ADC, &mut pac.RESETS);
     let mut temp_sensor = adc.enable_temp_sensor();
 
-    display.clear().unwrap();
-    watchdog.start(Microseconds::new(1_000_000));
+    let mut text_string: String<60> = String::new();
+    let mut loop_count: u64 = 0;
+
+    watchdog.start(Microseconds::new(2_000_000));
 
     loop {
         let reading: u16 = adc.read(&mut temp_sensor).unwrap();
         let voltage = reading as f32 * 3.3 / TEMP_SENSOR_RESOLUTION as f32;
         let temp = 27_f32 - (voltage - 0.706) / 0.001721;
-        display.clear().unwrap();
-        display
+
+        text_string.clear();
+
+        text_string
             .write_fmt(format_args!(
-                "temp: {:.1}*C\nr:    {}\nv:    {:.4}V",
-                temp, reading, voltage
+                "Temp:    {temp:.1}C\nreading: {reading}\nvoltage: {voltage:.4}V\n{loop_count}"
             ))
             .unwrap();
-        // led_pin.set_high().unwrap();
-        // delay.delay_ms(50);
-        // led_pin.set_low().unwrap();
+        let text = Text::with_baseline(
+            text_string.as_str(),
+            Point::zero(),
+            text_style,
+            Baseline::Top,
+        );
+
+        display.clear();
+        text.draw(&mut display).unwrap();
+        display.flush().unwrap();
+
         delay.delay_ms(500);
         watchdog.feed();
+        loop_count += 1;
     }
 }
 
